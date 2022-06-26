@@ -206,14 +206,14 @@ class AddManagers(ModelClassInitializer):
 
         new_manager_info = self.add_new_class_for_current_module(name, bases)
         # copy fields to a new manager
-        new_cls_def_context = ClassDefContext(cls=new_manager_info.defn, reason=self.ctx.reason, api=self.api)
         custom_manager_type = Instance(new_manager_info, [Instance(self.model_classdef.info, [])])
 
         for name, sym in base_manager_info.names.items():
             # replace self type with new class, if copying method
             if isinstance(sym.node, FuncDef):
                 helpers.copy_method_to_another_class(
-                    new_cls_def_context,
+                    api=self.api,
+                    cls=new_manager_info.defn,
                     self_type=custom_manager_type,
                     new_method_name=name,
                     method_node=sym.node,
