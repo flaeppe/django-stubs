@@ -221,7 +221,7 @@ def merge_queryset_into_manager(
             helpers.add_new_sym_for_info(
                 manager_info,
                 name=name,
-                sym_type=AnyType(TypeOfAny.special_form),
+                sym_type=AnyType(TypeOfAny.implementation_artifact),
             )
 
     # For methods on BaseManager that return a queryset we need to update the
@@ -233,7 +233,7 @@ def merge_queryset_into_manager(
         helpers.add_new_sym_for_info(
             manager_info,
             name=name,
-            sym_type=AnyType(TypeOfAny.special_form),
+            sym_type=AnyType(TypeOfAny.implementation_artifact),
         )
 
 
