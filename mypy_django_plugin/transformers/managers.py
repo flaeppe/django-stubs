@@ -155,8 +155,10 @@ def resolve_manager_method(ctx: AttributeContext) -> MypyType:
     A 'get_attribute_hook' that is intended to be invoked whenever the TypeChecker encounters
     an attribute on a class that has 'django.db.models.BaseManager' as a base.
     """
-    # Skip (method) type that is currently something other than Any
+    # Skip (method) type that is currently something other than Any of type `implementation_artifact`
     if not isinstance(ctx.default_attr_type, AnyType):
+        return ctx.default_attr_type
+    elif ctx.default_attr_type.type_of_any != TypeOfAny.implementation_artifact:
         return ctx.default_attr_type
 
     # (Current state is:) We wouldn't end up here when looking up a method from a custom _manager_.
