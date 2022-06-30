@@ -303,18 +303,13 @@ def create_new_manager_class_from_from_queryset_method(ctx: DynamicClassDefConte
     new_manager_info.defn.line = ctx.call.line
     new_manager_info.metaclass_type = new_manager_info.calculate_metaclass_type()
 
-    try:
-        merge_queryset_into_manager(
-            api=semanal_api,
-            manager_info=new_manager_info,
-            queryset_info=queryset_info,
-            manager_base=manager_base,
-            class_name=manager_class_name,
-        )
-    except helpers.IncompleteDefnException:
-        if not semanal_api.final_iteration:
-            semanal_api.defer()
-        return
+    merge_queryset_into_manager(
+        api=semanal_api,
+        manager_info=new_manager_info,
+        queryset_info=queryset_info,
+        manager_base=manager_base,
+        class_name=manager_class_name,
+    )
 
     symbol_kind = semanal_api.current_symbol_kind()
     # Annotate the module variable as `<Variable>: Type[<NewManager[Any]>]` as the model
@@ -396,18 +391,13 @@ def create_new_manager_class_from_as_manager_method(ctx: DynamicClassDefContext)
         new_manager_info.defn.type_vars = manager_base.defn.type_vars
         new_manager_info.defn.line = ctx.call.line
 
-        try:
-            merge_queryset_into_manager(
-                api=semanal_api,
-                manager_info=new_manager_info,
-                queryset_info=queryset_info,
-                manager_base=manager_base,
-                class_name=manager_class_name,
-            )
-        except helpers.IncompleteDefnException:
-            if not semanal_api.final_iteration:
-                semanal_api.defer()
-            return
+        merge_queryset_into_manager(
+            api=semanal_api,
+            manager_info=new_manager_info,
+            queryset_info=queryset_info,
+            manager_base=manager_base,
+            class_name=manager_class_name,
+        )
 
     # Whenever `<QuerySet>.as_manager()` isn't called at class level, we want to ensure
     # that the variable is an instance of our generated manager. Instead of the return
