@@ -545,3 +545,41 @@
               BaseManagerFromModelQuerySet = BaseManager.from_queryset(ModelQuerySet)
               class MyModel(models.Model):
                   objects = BaseManagerFromModelQuerySet()
+
+-   case: accepts_explicit_none_as_class_name
+    main: |
+        from myapp.models import PositionalNone, NoneAsKwarg
+        reveal_type(PositionalNone)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[Any]]"
+        reveal_type(NoneAsKwarg)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[Any]]"
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models.manager import BaseManager
+
+              class ModelQuerySet(models.QuerySet):
+                  ...
+
+              PositionalNone = BaseManager.from_queryset(ModelQuerySet, None)
+              NoneAsKwarg = BaseManager.from_queryset(ModelQuerySet, class_name=None)
+
+-   case: uses_fallback_class_name_when_argument_is_not_string_expression
+    main: |
+        from myapp.models import StrCallable
+        reveal_type(StrCallable)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[Any]]"
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models.manager import BaseManager
+
+              class ModelQuerySet(models.QuerySet):
+                  ...
+
+              StrCallable = BaseManager.from_queryset(ModelQuerySet, class_name=str(1))

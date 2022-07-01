@@ -286,13 +286,15 @@ def create_new_manager_class_from_from_queryset_method(ctx: DynamicClassDefConte
     queryset_info = queryset_sym.node
     assert isinstance(queryset_info, TypeInfo)
 
+    class_name_param_value = None
     if len(ctx.call.args) > 1:
         expr = ctx.call.args[1]
-        assert isinstance(expr, StrExpr)
-        manager_class_name = expr.value
-    else:
-        manager_class_name = manager_base.name + "From" + queryset_info.name
+        if isinstance(expr, StrExpr):
+            class_name_param_value = expr.value
+        # When the argument is not a `StrExpr` we're gonna have a hard time figuring
+        # out what the runtime value will be, so we'll just use the default instead.
 
+    manager_class_name = class_name_param_value or manager_base.name + "From" + queryset_info.name
     manager_base_instance = fill_typevars(manager_base)
     assert isinstance(manager_base_instance, Instance)
     # Create a new `TypeInfo` instance for the manager type
@@ -324,8 +326,8 @@ def create_new_manager_class_from_from_queryset_method(ctx: DynamicClassDefConte
     var._fullname = f"{semanal_api.cur_mod_id}.{ctx.name}"
     var.is_inferred = True
     # Note: Order of `add_symbol_table_node` calls matter. Case being if
-    # `ctx.name == new_manager_info.name`, then we'd _only_ like the type and not the
-    # `Var` to exist..
+    # `ctx.name == new_manager_info.name`, then we'd like the type to override the
+    # `Var`, so the `Var` won't exist in the end.
     assert semanal_api.add_symbol_table_node(ctx.name, SymbolTableNode(symbol_kind, var, plugin_generated=True))
     # Insert the new manager dynamic class
     assert semanal_api.add_symbol_table_node(
