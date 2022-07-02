@@ -503,8 +503,8 @@
 -   case: reuses_type_when_called_twice_identically
     main: |
         from myapp.models import MyModel, FirstManager, SecondManager
-        reveal_type(FirstManager)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[Any]]"
-        reveal_type(SecondManager)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[Any]]"
+        reveal_type(FirstManager)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(SecondManager)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[myapp.models.MyModel]]"
         reveal_type(MyModel.first)  # N: Revealed type is "myapp.models.BaseManagerFromModelQuerySet[myapp.models.MyModel]"
         reveal_type(MyModel.second)  # N: Revealed type is "myapp.models.BaseManagerFromModelQuerySet[myapp.models.MyModel]"
     installed_apps:
@@ -583,3 +583,228 @@
                   ...
 
               StrCallable = BaseManager.from_queryset(ModelQuerySet, class_name=str(1))
+
+-   case: yields_error_when_mismatching_manager_and_queryset_model_args
+    main: |
+        from myapp.models import FromBaseManager, FromManager, MyModel
+        reveal_type(FromBaseManager)  # N: Revealed type is "Type[myapp.models.BaseModelManagerFromModelQuerySet[Any]]"
+        reveal_type(MyModel.base)  # N: Revealed type is "myapp.models.BaseModelManagerFromModelQuerySet[Any]"
+        reveal_type(FromManager)  # N: Revealed type is "Type[myapp.models.ManagerModelManagerFromModelQuerySet[Any]]"
+        reveal_type(MyModel.manager)  # N: Revealed type is "myapp.models.ManagerModelManagerFromModelQuerySet[Any]"
+    out: |
+        myapp/models:13: error: Manager model argument not matching queryset model argument
+        myapp/models:14: error: Manager model argument not matching queryset model argument
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models.manager import BaseManager
+
+              class ModelQuerySet(models.QuerySet["MyModel"]):
+                  ...
+
+              class BaseModelManager(BaseManager["OtherModel"]):
+                  ...
+
+              class ManagerModelManager(models.Manager["OtherModel"]):
+                  ...
+
+              FromBaseManager = BaseModelManager.from_queryset(ModelQuerySet)
+              FromManager = ManagerModelManager.from_queryset(ModelQuerySet)
+              class MyModel(models.Model):
+                  base = FromBaseManager()
+                  manager = FromManager()
+
+              class OtherModel(models.Model):
+                  ...
+
+-   case: populates_model_arg_from_manager_when_missing_on_queryset
+    main: |
+        from myapp.models import FromBaseManager, FromManager, MyModel
+        reveal_type(FromBaseManager)  # N: Revealed type is "Type[myapp.models.BaseModelManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.base)  # N: Revealed type is "myapp.models.BaseModelManagerFromModelQuerySet[myapp.models.MyModel]"
+        reveal_type(FromManager)  # N: Revealed type is "Type[myapp.models.ManagerModelManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.manager)  # N: Revealed type is "myapp.models.ManagerModelManagerFromModelQuerySet[myapp.models.MyModel]"
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models.manager import BaseManager
+
+              class ModelQuerySet(models.QuerySet):
+                  ...
+
+              class BaseModelManager(BaseManager["MyModel"]):
+                  ...
+
+              class ManagerModelManager(models.Manager["MyModel"]):
+                  ...
+
+              FromBaseManager = BaseModelManager.from_queryset(ModelQuerySet)
+              FromManager = ManagerModelManager.from_queryset(ModelQuerySet)
+              class MyModel(models.Model):
+                  base = FromBaseManager()
+                  manager = FromManager()
+
+-   case: populates_model_arg_from_queryset_when_missing_on_manager
+    main: |
+        from myapp.models import FromBaseManager, FromManager, MyModel
+        reveal_type(FromBaseManager)  # N: Revealed type is "Type[myapp.models.BaseModelManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.base)  # N: Revealed type is "myapp.models.BaseModelManagerFromModelQuerySet[myapp.models.MyModel]"
+        reveal_type(FromManager)  # N: Revealed type is "Type[myapp.models.ManagerModelManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.manager)  # N: Revealed type is "myapp.models.ManagerModelManagerFromModelQuerySet[myapp.models.MyModel]"
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models.manager import BaseManager
+
+              class ModelQuerySet(models.QuerySet["MyModel"]):
+                  ...
+
+              class BaseModelManager(BaseManager):
+                  ...
+
+              class ManagerModelManager(models.Manager):
+                  ...
+
+              FromBaseManager = BaseModelManager.from_queryset(ModelQuerySet)
+              FromManager = ManagerModelManager.from_queryset(ModelQuerySet)
+              class MyModel(models.Model):
+                  base = FromBaseManager()
+                  manager = FromManager()
+
+-   case: populates_model_arg_from_queryset_when_manager_base_is_django_builtin_manager
+    main: |
+        from myapp.models import FromBaseManager, FromManager, MyModel
+        reveal_type(FromBaseManager)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.base)  # N: Revealed type is "myapp.models.BaseManagerFromModelQuerySet[myapp.models.MyModel]"
+        reveal_type(FromManager)  # N: Revealed type is "Type[myapp.models.ManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.manager)  # N: Revealed type is "myapp.models.ManagerFromModelQuerySet[myapp.models.MyModel]"
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models.manager import BaseManager
+
+              class ModelQuerySet(models.QuerySet["MyModel"]):
+                  ...
+
+              FromBaseManager = BaseManager.from_queryset(ModelQuerySet)
+              FromManager = models.Manager.from_queryset(ModelQuerySet)
+              class MyModel(models.Model):
+                  base = FromBaseManager()
+                  manager = FromManager()
+
+-   case: populates_model_arg_from_manager_when_queryset_is_django_builtin
+    main: |
+        from myapp.models import FromBaseManager, FromManager, MyModel
+        reveal_type(FromBaseManager)  # N: Revealed type is "Type[myapp.models.BaseModelManagerFromQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.base)  # N: Revealed type is "myapp.models.BaseModelManagerFromQuerySet[myapp.models.MyModel]"
+        reveal_type(FromManager)  # N: Revealed type is "Type[myapp.models.ManagerModelManagerFromQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.manager)  # N: Revealed type is "myapp.models.ManagerModelManagerFromQuerySet[myapp.models.MyModel]"
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models import QuerySet
+              from django.db.models.manager import BaseManager
+
+              class BaseModelManager(BaseManager["MyModel"]):
+                  ...
+
+              class ManagerModelManager(models.Manager["MyModel"]):
+                  ...
+
+              FromBaseManager = BaseModelManager.from_queryset(QuerySet)
+              FromManager = ManagerModelManager.from_queryset(QuerySet)
+              class MyModel(models.Model):
+                  base = FromBaseManager()
+                  manager = FromManager()
+
+-   case: populates_model_arg_as_any_when_no_args_specified
+    main: |
+        from myapp.models import FromCustomBaseManager, FromCustomManager, FromBaseManager, FromManager, MyModel
+        reveal_type(FromCustomBaseManager)  # N: Revealed type is "Type[myapp.models.BaseModelManagerFromModelQuerySet[Any]]"
+        reveal_type(MyModel.custom_base)  # N: Revealed type is "myapp.models.BaseModelManagerFromModelQuerySet[myapp.models.MyModel]"
+        reveal_type(FromCustomManager)  # N: Revealed type is "Type[myapp.models.ManagerModelManagerFromModelQuerySet[Any]]"
+        reveal_type(MyModel.custom_manager)  # N: Revealed type is "myapp.models.ManagerModelManagerFromModelQuerySet[myapp.models.MyModel]"
+        reveal_type(FromBaseManager)  # N: Revealed type is "Type[myapp.models.BaseManagerFromModelQuerySet[Any]]"
+        reveal_type(MyModel.base)  # N: Revealed type is "myapp.models.BaseManagerFromModelQuerySet[myapp.models.MyModel]"
+        reveal_type(FromManager)  # N: Revealed type is "Type[myapp.models.ManagerFromModelQuerySet[Any]]"
+        reveal_type(MyModel.manager)  # N: Revealed type is "myapp.models.ManagerFromModelQuerySet[myapp.models.MyModel]"
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models import QuerySet
+              from django.db.models.manager import BaseManager
+
+              class ModelQuerySet(models.QuerySet):
+                ...
+
+              class BaseModelManager(BaseManager):
+                  ...
+
+              class ManagerModelManager(models.Manager):
+                  ...
+
+              FromCustomBaseManager = BaseModelManager.from_queryset(ModelQuerySet)
+              FromCustomManager = ManagerModelManager.from_queryset(ModelQuerySet)
+              FromBaseManager = BaseManager.from_queryset(ModelQuerySet)
+              FromManager = models.Manager.from_queryset(ModelQuerySet)
+              class MyModel(models.Model):
+                  custom_base = FromCustomBaseManager()
+                  custom_manager = FromCustomManager()
+                  base = FromBaseManager()
+                  manager = FromManager()
+
+-   case: populates_model_arg_when_same_for_manager_and_queryset
+    main: |
+        from myapp.models import FromBaseManager, FromManager, MyModel
+        reveal_type(FromBaseManager)  # N: Revealed type is "Type[myapp.models.BaseModelManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.base)  # N: Revealed type is "myapp.models.BaseModelManagerFromModelQuerySet[myapp.models.MyModel]"
+        reveal_type(FromManager)  # N: Revealed type is "Type[myapp.models.ManagerModelManagerFromModelQuerySet[myapp.models.MyModel]]"
+        reveal_type(MyModel.manager)  # N: Revealed type is "myapp.models.ManagerModelManagerFromModelQuerySet[myapp.models.MyModel]"
+    installed_apps:
+        - myapp
+    files:
+        - path: myapp/__init__.py
+        - path: myapp/models.py
+          content: |
+              from django.db import models
+              from django.db.models import QuerySet
+              from django.db.models.manager import BaseManager
+
+              class ModelQuerySet(models.QuerySet["MyModel"]):
+                ...
+
+              class BaseModelManager(BaseManager["MyModel"]):
+                  ...
+
+              class ManagerModelManager(models.Manager["MyModel"]):
+                  ...
+
+              FromBaseManager = BaseModelManager.from_queryset(ModelQuerySet)
+              FromManager = ManagerModelManager.from_queryset(ModelQuerySet)
+              class MyModel(models.Model):
+                  base = FromBaseManager()
+                  manager = FromManager()

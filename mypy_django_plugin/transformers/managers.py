@@ -12,7 +12,9 @@ from mypy.nodes import (
     OverloadedFuncDef,
     RefExpr,
     StrExpr,
+    SymbolNode,
     SymbolTableNode,
+    TypeAlias,
     TypeInfo,
     Var,
 )
@@ -20,7 +22,7 @@ from mypy.plugin import AttributeContext, DynamicClassDefContext, MethodContext
 from mypy.semanal import SemanticAnalyzer
 from mypy.types import AnyType, CallableType, Instance, ProperType
 from mypy.types import Type as MypyType
-from mypy.types import TypeOfAny, TypeType
+from mypy.types import TypeOfAny, TypeType, TypeVarType
 from typing_extensions import Final
 
 from mypy_django_plugin import errorcodes
@@ -239,6 +241,102 @@ def merge_queryset_into_manager(
         )
 
 
+def get_dynamic_manager_model_argument_type(manager_info: TypeInfo, queryset_info: TypeInfo) -> Optional[MypyType]:
+    """
+    TODO: Fill me out
+    """
+    # TODO: Add test with manager inheritance
+    # TODO: Add test with queryset inheritance
+    manager_model_arg = next(
+        (
+            base.args[0]
+            for base in helpers.iter_bases(manager_info)
+            if (
+                base.type.fullname in {fullnames.MANAGER_CLASS_FULLNAME, fullnames.BASE_MANAGER_CLASS_FULLNAME}
+                and len(base.args) > 0
+            )
+        ),
+        (
+            AnyType(TypeOfAny.from_omitted_generics)
+            if manager_info.fullname == fullnames.BASE_MANAGER_CLASS_FULLNAME
+            else None
+        ),
+    )
+    if isinstance(manager_model_arg, TypeVarType):
+        # Since `django.db.models.Manager` is a subclass of `BaseManager` we'll collect
+        # its default `TypeVar` when argument has been omitted. Then we'll refine the
+        # manager argument to be the type var's upper bound.
+        manager_model_arg = manager_model_arg.upper_bound
+
+    queryset_model_arg = next(
+        (
+            base.args[0]
+            for base in helpers.iter_bases(queryset_info)
+            if base.type.fullname == fullnames.QUERYSET_CLASS_FULLNAME and len(base.args) > 0
+        ),
+        (
+            AnyType(TypeOfAny.from_omitted_generics)
+            if queryset_info.fullname == fullnames.QUERYSET_CLASS_FULLNAME
+            else None
+        ),
+    )
+
+    if (
+        isinstance(manager_model_arg, Instance)
+        and isinstance(queryset_model_arg, Instance)
+        and (
+            manager_model_arg.type.fullname == queryset_model_arg.type.fullname
+            # Allow queryset model arg if manager model arg comes in as the default
+            # upper bound `django.db.models.base.Model`
+            or manager_model_arg.type.fullname == fullnames.MODEL_CLASS_FULLNAME
+        )
+    ):
+        """
+        Captures:
+        - CustomManager(BaseManager[CustomModel]) with CustomQuerySet(QuerySet[CustomModel])
+        - CustomManager(Manager[CustomModel]) with CustomQuerySet(QuerySet[CustomModel])
+        - Manager with CustomQuerySet(QuerySet[CustomModel])
+        """
+        return queryset_model_arg
+    elif (
+        isinstance(manager_model_arg, AnyType)
+        and isinstance(queryset_model_arg, Instance)
+        and manager_model_arg.type_of_any == TypeOfAny.from_omitted_generics
+    ):
+        """
+        Captures:
+        - CustomManager(BaseManager) with CustomQuerySet(QuerySet[CustomModel])
+        - CustomManager(Manager) with CustomQuerySet(QuerySet[CustomModel])
+        - BaseManager with CustomQuerySet(QuerySet[CustomModel])
+        """
+        return queryset_model_arg
+    elif (
+        isinstance(manager_model_arg, Instance)
+        and isinstance(queryset_model_arg, AnyType)
+        and queryset_model_arg.type_of_any == TypeOfAny.from_omitted_generics
+    ):
+        """
+        Captures:
+        - CustomManager(BaseManager[CustomModel]) with QuerySet
+        - CustomManager(Manager[CustomModel]) with QuerySet
+        """
+        if manager_model_arg.type.fullname == fullnames.MODEL_CLASS_FULLNAME:
+            # Avoid populating default upper bound `django.db.models.base.Model`
+            return AnyType(TypeOfAny.from_omitted_generics)
+        return manager_model_arg
+    elif manager_model_arg is not None and queryset_model_arg is not None and manager_model_arg == queryset_model_arg:
+        """
+        Captures:
+        - BaseManager with QuerySet
+        - Manager with QuerySet
+        - CustomManager(BaseManager) with CustomQuerySet(QuerySet)
+        - CustomManager(Manager) with CustomQuerySet(QuerySet)
+        """
+        return queryset_model_arg
+
+    return None
+
+
 def create_new_manager_class_from_from_queryset_method(ctx: DynamicClassDefContext) -> None:
     """
     Insert a new manager class node for a: '<Name> = <Manager>.from_queryset(<QuerySet>)'.
@@ -265,7 +363,7 @@ def create_new_manager_class_from_from_queryset_method(ctx: DynamicClassDefConte
     assert isinstance(manager_base, TypeInfo)
 
     passed_queryset = ctx.call.args[0]
-    assert isinstance(passed_queryset, NameExpr)
+    assert isinstance(passed_queryset, NameExpr)  # TODO: Add `MemberExpr`?
 
     if passed_queryset.fullname is None:
         # In some cases, due to the way the semantic analyzer works, only passed_queryset.name is available.
@@ -276,17 +374,26 @@ def create_new_manager_class_from_from_queryset_method(ctx: DynamicClassDefConte
         # skip doing any work if we're inside of one..
         return
 
+    queryset_info: SymbolNode  # We'll specialise this more a bit further down
+    class_name_param_value = None
     queryset_sym = semanal_api.lookup_fully_qualified_or_none(passed_queryset.fullname)
     assert queryset_sym is not None
     if queryset_sym.node is None:
         if not semanal_api.final_iteration:
             semanal_api.defer()
         return
+    elif isinstance(queryset_sym.node, TypeAlias):
+        assert isinstance(queryset_sym.node.target, Instance)
+        queryset_info = queryset_sym.node.target.type
+        # When we've encountered an alias, we take the queryset name from the alias.
+        # As e.g. for `django.db.models.QuerySet`, which is an alias, we'll otherwise
+        # get a name of `django.db.models._QuerySet`
+        class_name_param_value = manager_base.name + "From" + queryset_sym.node.name
+    else:
+        queryset_info = queryset_sym.node
 
-    queryset_info = queryset_sym.node
     assert isinstance(queryset_info, TypeInfo)
 
-    class_name_param_value = None
     if len(ctx.call.args) > 1:
         expr = ctx.call.args[1]
         if isinstance(expr, StrExpr):
@@ -315,12 +422,20 @@ def create_new_manager_class_from_from_queryset_method(ctx: DynamicClassDefConte
         class_name=manager_class_name,
     )
 
+    model_argument_type = get_dynamic_manager_model_argument_type(manager_base, queryset_info)
+    if model_argument_type is None:
+        semanal_api.fail(
+            "Manager model argument not matching queryset model argument",
+            ctx.call,
+            code=errorcodes.MODEL_ARG_MISMATCH,
+        )
+        model_argument_type = AnyType(TypeOfAny.from_error)
+
     symbol_kind = semanal_api.current_symbol_kind()
-    # Annotate the module variable as `<Variable>: Type[<NewManager[Any]>]` as the model
-    # type won't be defined on variable level.
+    # Annotate the module variable
     var = Var(
         name=ctx.name,
-        type=TypeType(Instance(new_manager_info, [AnyType(TypeOfAny.from_omitted_generics)])),
+        type=TypeType(Instance(new_manager_info, [model_argument_type])),
     )
     var.info = new_manager_info
     var._fullname = f"{semanal_api.cur_mod_id}.{ctx.name}"
