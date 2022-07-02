@@ -521,3 +521,90 @@
         myapp/models:47: note: Revealed type is "django.db.models.manager.BaseManager[myapp.models.InvisibleUnresolvable]"
         myapp/models:49: note: Revealed type is "django.db.models.manager.RelatedManager[myapp.models.Booking]"
         myapp/models:50: note: Revealed type is "django.db.models.manager.RelatedManager[myapp.models.Booking]"
+
+-   case: emits_error_when_manager_model_arg_does_not_match_model
+    main: |
+        from myapp.models import MyModel
+        reveal_type(MyModel.from_manager)  # N: Revealed type is "myapp.models.FromManager[Any]"
+        reveal_type(MyModel.from_base_manager)  # N: Revealed type is "myapp.models.FromBaseManager[Any]"
+    out: |
+        myapp/models:11: error: Manager model argument does not match model it is assigned to
+        myapp/models:12: error: Manager model argument does not match model it is assigned to
+    installed_apps:
+        - myapp
+    files:
+        -   path: myapp/__init__.py
+        -   path: myapp/models.py
+            content: |
+                from django.db import models
+                from django.db.models.manager import BaseManager
+
+                class FromManager(models.Manager["OtherModel"]):
+                    ...
+
+                class FromBaseManager(BaseManager["OtherModel"]):
+                    ...
+
+                class MyModel(models.Model):
+                    from_manager = FromManager()
+                    from_base_manager = FromBaseManager()
+
+                class OtherModel(models.Model):
+                    ...
+
+-   case: emits_error_when_imported_manager_model_arg_does_not_match_model
+    main: |
+        from myapp.models import MyModel
+        reveal_type(MyModel.from_manager)  # N: Revealed type is "myapp.managers.FromManager[Any]"
+        reveal_type(MyModel.from_base_manager)  # N: Revealed type is "myapp.managers.FromBaseManager[Any]"
+    out: |
+        myapp/models:5: error: Manager model argument does not match model it is assigned to
+        myapp/models:6: error: Manager model argument does not match model it is assigned to
+    installed_apps:
+        - myapp
+    files:
+        -   path: myapp/__init__.py
+        -   path: myapp/models.py
+            content: |
+                from django.db import models
+                from .managers import FromManager, FromBaseManager
+
+                class MyModel(models.Model):
+                    from_manager = FromManager()
+                    from_base_manager = FromBaseManager()
+
+                class OtherModel(models.Model):
+                    ...
+        -   path: myapp/managers.py
+            content: |
+                from typing import TYPE_CHECKING
+                from django.db import models
+                from django.db.models.manager import BaseManager
+
+                if TYPE_CHECKING:
+                    from .models import OtherModel
+
+                class FromManager(models.Manager["OtherModel"]):
+                    ...
+
+                class FromBaseManager(BaseManager["OtherModel"]):
+                    ...
+
+-   case: populates_manager_model_arg_for_django_builtin_managers
+    main: |
+        from myapp.models import MyModel
+        reveal_type(MyModel.from_manager)  # N: Revealed type is "django.db.models.manager.Manager[myapp.models.MyModel]"
+        reveal_type(MyModel.from_base_manager)  # N: Revealed type is "django.db.models.manager.BaseManager[myapp.models.MyModel]"
+    installed_apps:
+        - myapp
+    files:
+        -   path: myapp/__init__.py
+        -   path: myapp/models.py
+            content: |
+                from django.db import models
+                from django.db.models.manager import BaseManager
+
+                class MyModel(models.Model):
+                    from_manager = models.Manager()
+                    # TODO: Why do get complaint that we "Need type annotation ..."?
+                    from_base_manager: BaseManager = BaseManager()

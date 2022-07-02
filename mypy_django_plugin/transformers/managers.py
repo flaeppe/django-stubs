@@ -241,20 +241,15 @@ def merge_queryset_into_manager(
         )
 
 
-def get_dynamic_manager_model_argument_type(manager_info: TypeInfo, queryset_info: TypeInfo) -> Optional[MypyType]:
+def get_manager_model_argument_type(manager_info: TypeInfo) -> Optional[MypyType]:
     """
     TODO: Fill me out
     """
-    # TODO: Add test with manager inheritance
-    # TODO: Add test with queryset inheritance
     manager_model_arg = next(
         (
             base.args[0]
             for base in helpers.iter_bases(manager_info)
-            if (
-                base.type.fullname in {fullnames.MANAGER_CLASS_FULLNAME, fullnames.BASE_MANAGER_CLASS_FULLNAME}
-                and len(base.args) > 0
-            )
+            if (base.type.fullname in fullnames.MANAGER_CLASSES and len(base.args) > 0)
         ),
         (
             AnyType(TypeOfAny.from_omitted_generics)
@@ -264,10 +259,22 @@ def get_dynamic_manager_model_argument_type(manager_info: TypeInfo, queryset_inf
     )
     if isinstance(manager_model_arg, TypeVarType):
         # Since `django.db.models.Manager` is a subclass of `BaseManager` we'll collect
-        # its default `TypeVar` when argument has been omitted. Then we'll refine the
+        # its default `TypeVar` when argument has been omitted. So now we'll refine the
         # manager argument to be the type var's upper bound.
         manager_model_arg = manager_model_arg.upper_bound
 
+    return manager_model_arg
+
+
+def intersect_manager_and_queryset_model_argument_type(
+    manager_info: TypeInfo, queryset_info: TypeInfo
+) -> Optional[MypyType]:
+    """
+    TODO: Fill me out
+    """
+    # TODO: Add test with manager inheritance
+    # TODO: Add test with queryset inheritance
+    manager_model_arg = get_manager_model_argument_type(manager_info)
     queryset_model_arg = next(
         (
             base.args[0]
@@ -422,10 +429,10 @@ def create_new_manager_class_from_from_queryset_method(ctx: DynamicClassDefConte
         class_name=manager_class_name,
     )
 
-    model_argument_type = get_dynamic_manager_model_argument_type(manager_base, queryset_info)
+    model_argument_type = intersect_manager_and_queryset_model_argument_type(manager_base, queryset_info)
     if model_argument_type is None:
         semanal_api.fail(
-            "Manager model argument not matching queryset model argument",
+            "Manager model argument does not match queryset model argument",
             ctx.call,
             code=errorcodes.MODEL_ARG_MISMATCH,
         )

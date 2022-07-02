@@ -584,7 +584,7 @@
 
               StrCallable = BaseManager.from_queryset(ModelQuerySet, class_name=str(1))
 
--   case: yields_error_when_mismatching_manager_and_queryset_model_args
+-   case: emits_error_when_mismatching_manager_and_queryset_model_args
     main: |
         from myapp.models import FromBaseManager, FromManager, MyModel
         reveal_type(FromBaseManager)  # N: Revealed type is "Type[myapp.models.BaseModelManagerFromModelQuerySet[Any]]"
@@ -592,8 +592,10 @@
         reveal_type(FromManager)  # N: Revealed type is "Type[myapp.models.ManagerModelManagerFromModelQuerySet[Any]]"
         reveal_type(MyModel.manager)  # N: Revealed type is "myapp.models.ManagerModelManagerFromModelQuerySet[Any]"
     out: |
-        myapp/models:13: error: Manager model argument not matching queryset model argument
-        myapp/models:14: error: Manager model argument not matching queryset model argument
+        myapp/models:13: error: Manager model argument does not match queryset model argument
+        myapp/models:14: error: Manager model argument does not match queryset model argument
+        myapp/models:16: error: Manager model argument does not match model it is assigned to
+        myapp/models:17: error: Manager model argument does not match model it is assigned to
     installed_apps:
         - myapp
     files:

@@ -9,17 +9,21 @@ from mypy.nodes import ARG_STAR2, Argument, AssignmentStmt, Context, FuncDef, Na
 from mypy.plugin import AnalyzeTypeContext, AttributeContext, CheckerPluginInterface, ClassDefContext
 from mypy.plugins import common
 from mypy.semanal import SemanticAnalyzer
-from mypy.types import AnyType, Instance
+from mypy.types import AnyType, Instance, PlaceholderType
 from mypy.types import Type as MypyType
 from mypy.types import TypedDictType, TypeOfAny
 
 from mypy_django_plugin.django.context import DjangoContext
-from mypy_django_plugin.errorcodes import MANAGER_MISSING
+from mypy_django_plugin.errorcodes import MANAGER_MISSING, MODEL_ARG_MISMATCH
 from mypy_django_plugin.lib import fullnames, helpers
 from mypy_django_plugin.lib.fullnames import ANNOTATIONS_FULLNAME, ANY_ATTR_ALLOWED_CLASS_FULLNAME, MODEL_CLASS_FULLNAME
 from mypy_django_plugin.lib.helpers import add_new_class_for_module
 from mypy_django_plugin.transformers import fields
 from mypy_django_plugin.transformers.fields import get_field_descriptor_types
+from mypy_django_plugin.transformers.managers import (
+    get_manager_model_argument_type,
+    intersect_manager_and_queryset_model_argument_type,
+)
 
 
 class ModelClassInitializer:
@@ -192,7 +196,11 @@ class AddManagers(ModelClassInitializer):
         return False
 
     def is_any_parametrized_manager(self, typ: Instance) -> bool:
-        return typ.type.fullname in fullnames.MANAGER_CLASSES and isinstance(typ.args[0], AnyType)
+        return (
+            typ.type.fullname in fullnames.MANAGER_CLASSES
+            and isinstance(typ.args[0], AnyType)
+            and typ.args[0].type_of_any == TypeOfAny.from_omitted_generics
+        )
 
     def create_new_model_parametrized_manager(self, name: str, base_manager_info: TypeInfo) -> Instance:
         bases = []
@@ -231,6 +239,50 @@ class AddManagers(ModelClassInitializer):
 
         return custom_manager_type
 
+    def manager_is_dynamically_generated(self, manager_info: TypeInfo) -> bool:
+        return manager_info.metadata.get("django", {}).get("from_queryset_manager") is not None
+
+    def get_manager_model_argument_type(self, manager_info: TypeInfo) -> Optional[MypyType]:
+        if self.manager_is_dynamically_generated(manager_info):
+            queryset_info = self.lookup_typeinfo(manager_info.metadata["django"]["from_queryset_manager"])
+            # TODO: We should always be able to find the `TypeInfo` we created a
+            # dynamic manager class from, right?
+            assert queryset_info is not None
+            arg_type = intersect_manager_and_queryset_model_argument_type(manager_info, queryset_info)
+        else:
+            arg_type = get_manager_model_argument_type(manager_info)
+
+        return arg_type
+
+    def get_manager_type(self, manager_name: str, manager_info: TypeInfo) -> Optional[MypyType]:
+        manager_arg_type = self.get_manager_model_argument_type(manager_info)
+        if (
+            isinstance(manager_arg_type, Instance)
+            and (
+                manager_arg_type.type.fullname == self.model_classdef.info.fullname
+                # We accept overwriting declared upper bound of model argument type
+                or manager_arg_type.type.fullname == fullnames.MODEL_CLASS_FULLNAME
+            )
+        ) or (
+            isinstance(manager_arg_type, AnyType) and manager_arg_type.type_of_any == TypeOfAny.from_omitted_generics
+        ):
+            return Instance(manager_info, [Instance(self.model_classdef.info, [])])
+        elif isinstance(manager_arg_type, PlaceholderType):
+            # Arg is expected to become a type, at some point, but for now we can't
+            # process it.
+            return None
+        else:
+            self.api.fail(
+                "Manager model argument does not match model it is assigned to",
+                (
+                    self.model_classdef.info.names[manager_name].node or self.model_classdef
+                    if manager_name in self.model_classdef.info.names
+                    else self.model_classdef
+                ),
+                code=MODEL_ARG_MISMATCH,
+            )
+            return Instance(manager_info, [AnyType(TypeOfAny.from_error)])
+
     def run_with_model_cls(self, model_cls: Type[Model]) -> None:
         manager_info: Optional[TypeInfo]
 
@@ -254,10 +306,14 @@ class AddManagers(ModelClassInitializer):
                 if manager_info is None:
                     continue
 
-            is_dynamically_generated = manager_info.metadata.get("django", {}).get("from_queryset_manager") is not None
-            if manager_name not in self.model_classdef.info.names or is_dynamically_generated:
-                manager_type = Instance(manager_info, [Instance(self.model_classdef.info, [])])
-                self.add_new_node_to_model_class(manager_name, manager_type)
+            if manager_name not in self.model_classdef.info.names or self.manager_is_dynamically_generated(
+                manager_info
+            ):
+                manager_type = self.get_manager_type(manager_name, manager_info)
+                if manager_type is not None:
+                    self.add_new_node_to_model_class(manager_name, manager_type)
+                else:
+                    incomplete_manager_defs.add(manager_name)
             elif self.has_any_parametrized_manager_as_base(manager_info):
                 # Ending up here could for instance be due to having a custom _Manager_
                 # that is not built from a custom QuerySet. Another example is a
@@ -271,6 +327,13 @@ class AddManagers(ModelClassInitializer):
                     continue
 
                 self.add_new_node_to_model_class(manager_name, custom_manager_type)
+            else:
+                manager_type = self.get_manager_type(manager_name, manager_info)
+                if manager_type is not None:
+                    # TODO: Can we avoid overwriting? Since `manager_name` is in type info names
+                    self.add_new_node_to_model_class(manager_name, manager_type)
+                else:
+                    incomplete_manager_defs.add(manager_name)
 
         if incomplete_manager_defs and not self.api.final_iteration:
             #  Unless we're on the final round, see if another round could figure out all manager types
