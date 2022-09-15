@@ -8,7 +8,7 @@ from django.db.models.base import Model
 from django.db.models.fields import Field, _ErrorMessagesT, _FieldChoices
 from django.db.models.query_utils import DeferredAttribute
 from django.utils._os import _PathCompatible
-from django.utils.functional import _StrOrPromise
+from django.utils.functional import StrOrPromise
 from typing_extensions import Protocol
 
 class FieldFile(File):
@@ -47,7 +47,7 @@ class FileField(Field):
     upload_to: Union[_PathCompatible, _UploadToCallable] = ...
     def __init__(
         self,
-        verbose_name: Optional[_StrOrPromise] = ...,
+        verbose_name: Optional[StrOrPromise] = ...,
         name: Optional[str] = ...,
         upload_to: Union[_PathCompatible, _UploadToCallable] = ...,
         storage: Optional[Union[Storage, Callable[[], Storage]]] = ...,
@@ -65,7 +65,7 @@ class FileField(Field):
         unique_for_month: Optional[str] = ...,
         unique_for_year: Optional[str] = ...,
         choices: Optional[_FieldChoices] = ...,
-        help_text: _StrOrPromise = ...,
+        help_text: StrOrPromise = ...,
         db_column: Optional[str] = ...,
         db_tablespace: Optional[str] = ...,
         validators: Iterable[validators._ValidatorCallable] = ...,
@@ -93,7 +93,7 @@ class ImageFieldFile(ImageFile, FieldFile):
 class ImageField(FileField):
     def __init__(
         self,
-        verbose_name: Optional[_StrOrPromise] = ...,
+        verbose_name: Optional[StrOrPromise] = ...,
         name: Optional[str] = ...,
         width_field: Optional[str] = ...,
         height_field: Optional[str] = ...,

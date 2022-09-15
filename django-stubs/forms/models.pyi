@@ -33,7 +33,7 @@ from django.forms.renderers import BaseRenderer
 from django.forms.utils import ErrorList, _DataT, _FilesT
 from django.forms.widgets import ChoiceWidget, Input, Widget
 from django.utils.datastructures import _IndexableCollection, _ListOrTuple, _PropertyDescriptor
-from django.utils.functional import _StrOrPromise
+from django.utils.functional import StrOrPromise
 from typing_extensions import Literal
 
 ALL_FIELDS: Literal["__all__"]
@@ -234,7 +234,7 @@ def inlineformset_factory(
 
 class InlineForeignKeyField(Field):
     disabled: bool
-    help_text: _StrOrPromise
+    help_text: StrOrPromise
     required: bool
     show_hidden_initial: bool
     widget: _ClassLevelWidgetT = ...
@@ -269,13 +269,13 @@ class ModelChoiceIterator:
 class ModelChoiceField(ChoiceField):
     disabled: bool
     error_messages: Dict[str, str]
-    help_text: _StrOrPromise
+    help_text: StrOrPromise
     required: bool
     show_hidden_initial: bool
     validators: List[Any]
     default_error_messages: Dict[str, str] = ...
     iterator: Type[ModelChoiceIterator] = ...
-    empty_label: Optional[_StrOrPromise] = ...
+    empty_label: Optional[StrOrPromise] = ...
     queryset: Optional[QuerySet[models.Model]] = ...
     limit_choices_to: Optional[_AllLimitChoicesTo] = ...
     to_field_name: Optional[str] = ...
@@ -283,12 +283,12 @@ class ModelChoiceField(ChoiceField):
         self,
         queryset: Union[None, Manager[models.Model], QuerySet[models.Model]],
         *,
-        empty_label: Optional[_StrOrPromise] = ...,
+        empty_label: Optional[StrOrPromise] = ...,
         required: bool = ...,
         widget: Optional[Union[Widget, Type[Widget]]] = ...,
-        label: Optional[_StrOrPromise] = ...,
+        label: Optional[StrOrPromise] = ...,
         initial: Optional[Any] = ...,
-        help_text: _StrOrPromise = ...,
+        help_text: StrOrPromise = ...,
         to_field_name: Optional[str] = ...,
         limit_choices_to: Optional[_AllLimitChoicesTo] = ...,
         blank: bool = ...,
@@ -307,8 +307,8 @@ class ModelChoiceField(ChoiceField):
 
 class ModelMultipleChoiceField(ModelChoiceField):
     disabled: bool
-    empty_label: Optional[_StrOrPromise]
-    help_text: _StrOrPromise
+    empty_label: Optional[StrOrPromise]
+    help_text: StrOrPromise
     required: bool
     show_hidden_initial: bool
     widget: _ClassLevelWidgetT = ...

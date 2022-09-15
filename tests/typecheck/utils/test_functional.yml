@@ -21,18 +21,18 @@
     main:  |
       from typing import Union
 
-      from django.utils.functional import Promise, lazystr, _StrPromise
+      from django.utils.functional import Promise, lazystr, StrPromise
 
       s = lazystr("asd")
 
-      reveal_type(s)                 # N: Revealed type is "django.utils.functional._StrPromise"
+      reveal_type(s)                 # N: Revealed type is "django.utils.functional.StrPromise"
 
       reveal_type(s.format("asd"))   # N: Revealed type is "builtins.str"
       reveal_type(s.capitalize())    # N: Revealed type is "builtins.str"
       reveal_type(s.swapcase)        # N: Revealed type is "def () -> builtins.str"
       reveal_type(s.__getnewargs__)  # N: Revealed type is "def () -> Tuple[builtins.str]"
-      s.nonsense                     # E: "_StrPromise" has no attribute "nonsense"
-      f: Union[_StrPromise, str]
+      s.nonsense                     # E: "StrPromise" has no attribute "nonsense"
+      f: Union[StrPromise, str]
       reveal_type(f.format("asd"))   # N: Revealed type is "builtins.str"
       reveal_type(f + "asd")         # N: Revealed type is "builtins.str"
       reveal_type("asd" + f)         # N: Revealed type is "Union[Any, builtins.str]"
@@ -47,5 +47,5 @@
       def bar(content: Promise) -> None:
         ...
 
-      foo(s)                         # E: Argument 1 to "foo" has incompatible type "_StrPromise"; expected "str"
+      foo(s)                         # E: Argument 1 to "foo" has incompatible type "StrPromise"; expected "str"
       bar(s)

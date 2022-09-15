@@ -27,7 +27,7 @@ def resolve_str_promise_attribute(ctx: AttributeContext) -> MypyType:
         ctx.context,
         is_lvalue=False,
         is_super=False,
-        # operators are already handled with magic methods defined in the stubs for _StrPromise
+        # operators are already handled with magic methods defined in the stubs for StrPromise
         is_operator=False,
         msg=ctx.api.msg,
         original_type=ctx.type,

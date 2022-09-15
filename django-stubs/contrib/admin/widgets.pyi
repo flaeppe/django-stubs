@@ -7,14 +7,14 @@ from django.db.models.fields import _FieldChoices
 from django.db.models.fields.reverse_related import ForeignObjectRel, ManyToManyRel, ManyToOneRel
 from django.forms.models import ModelChoiceIterator
 from django.forms.widgets import Media, _OptAttrs
-from django.utils.functional import _StrOrPromise
+from django.utils.functional import StrOrPromise
 
 class FilteredSelectMultiple(forms.SelectMultiple):
-    verbose_name: _StrOrPromise = ...
+    verbose_name: StrOrPromise = ...
     is_stacked: bool = ...
     def __init__(
         self,
-        verbose_name: _StrOrPromise,
+        verbose_name: StrOrPromise,
         is_stacked: bool,
         attrs: Optional[_OptAttrs] = ...,
         choices: _FieldChoices = ...,
