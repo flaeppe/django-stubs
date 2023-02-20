@@ -9,4 +9,4 @@ psycopg2-binary
 -e .[compatible-mypy]
 
 # Overrides:
-mypy==0.961
+mypy==1.0.1
