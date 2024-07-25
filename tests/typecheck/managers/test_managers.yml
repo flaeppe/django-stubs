@@ -653,3 +653,24 @@
                         def get_instance(self) -> int:
                             pass
                     objects = MyManager()
+
+-   case: test_parameterizes_base_manager_classes
+    main: |
+        from myapp.models import MyModel
+        reveal_type(MyModel.objects)  # N: Revealed type is "myapp.models.Manager[myapp.models.MyModel]"
+        MyModel.objects.filter(xyz__isnull=False)  # E: Cannot resolve keyword 'xyz' into field. Choices are: id  [misc]
+    installed_apps:
+        - myapp
+    files:
+        -   path: myapp/__init__.py
+        -   path: myapp/models.py
+            content: |
+                from typing import TypeVar
+                from django.db import models
+                from django.db.models.manager import BaseManager
+
+                T = TypeVar("T", bound=models.Model)
+                class Manager(BaseManager[T]): ...
+
+                class MyModel(models.Model):
+                    objects = Manager()
